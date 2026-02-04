@@ -173,7 +173,99 @@ async function main() {
         };
     });
     /**
-     * Tool 6: getState
+     * Tool 6: requestDocNumberConfirmation
+     */
+    mcp.tool("requestDocNumberConfirmation", "Solicita confirmación del número de documento mediante template de WhatsApp", {
+        channel: zod_1.z.string().default("whatsapp"),
+        externalId: zod_1.z.string().min(1),
+        docNumber: zod_1.z.string().min(1),
+    }, async (args) => {
+        const { channel, externalId, docNumber } = args;
+        await ensureUserAndConversation({
+            channel,
+            externalId,
+        });
+        // Retorna instrucción para n8n de enviar el template de confirmación
+        return {
+            content: [{
+                    type: "text",
+                    text: JSON.stringify({
+                        action: "sendDocConfirmation",
+                        templateName: "doc_confirmation",
+                        docNumber: docNumber,
+                        message: "Se debe enviar el template de confirmación de documento"
+                    })
+                }],
+        };
+    });
+    /**
+     * Tool 7: validateUserInSSO
+     */
+    mcp.tool("validateUserInSSO", "Valida la existencia del usuario en el SSO mediante su documento", {
+        channel: zod_1.z.string().default("whatsapp"),
+        externalId: zod_1.z.string().min(1),
+        docNumber: zod_1.z.string().min(1),
+    }, async (args) => {
+        const { channel, externalId, docNumber } = args;
+        try {
+            // Paso 1: Obtener token OAuth2
+            const tokenResponse = await fetch(process.env.SSO_TOKEN_URL, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/x-www-form-urlencoded",
+                },
+                body: new URLSearchParams({
+                    grant_type: "password",
+                    client_id: process.env.SSO_CLIENT_ID,
+                    client_secret: process.env.SSO_CLIENT_SECRET,
+                    username: process.env.SSO_USERNAME,
+                    password: process.env.SSO_PASSWORD,
+                }),
+            });
+            if (!tokenResponse.ok) {
+                throw new Error(`Token request failed: ${tokenResponse.statusText}`);
+            }
+            const tokenData = await tokenResponse.json();
+            const accessToken = tokenData.access_token;
+            // Paso 2: Validar existencia del usuario
+            const checkUrl = `${process.env.SSO_CHECK_EXISTENCE_URL}?documento=${docNumber}`;
+            const checkResponse = await fetch(checkUrl, {
+                method: "GET",
+                headers: {
+                    Authorization: `Bearer ${accessToken}`,
+                    "Content-Type": "application/json",
+                },
+            });
+            if (!checkResponse.ok) {
+                throw new Error(`User check failed: ${checkResponse.statusText}`);
+            }
+            const userData = await checkResponse.json();
+            return {
+                content: [{
+                        type: "text",
+                        text: JSON.stringify({
+                            exists: userData.exists || false,
+                            docNumber,
+                            userData: userData,
+                        }),
+                    }],
+            };
+        }
+        catch (error) {
+            return {
+                content: [{
+                        type: "text",
+                        text: JSON.stringify({
+                            exists: false,
+                            error: error.message,
+                            docNumber,
+                        }),
+                    }],
+            };
+        }
+    });
+    /**
+     * Tool 8: getState
      */
     mcp.tool("getState", "Obtiene el estado JSON de la conversación", {
         channel: zod_1.z.string().default("whatsapp"),
@@ -192,7 +284,7 @@ async function main() {
         };
     });
     /**
-     * Tool 7: setState
+     * Tool 9: setState
      */
     mcp.tool("setState", "Actualiza el estado JSON: replace=true reemplaza, si no hace merge superficial", {
         channel: zod_1.z.string().default("whatsapp"),
@@ -220,7 +312,7 @@ async function main() {
         };
     });
     /**
-     * Tool 8: appendMessage
+     * Tool 10: appendMessage
      */
     mcp.tool("appendMessage", "Guarda un mensaje en la conversación", {
         channel: zod_1.z.string().default("whatsapp"),
@@ -247,7 +339,7 @@ async function main() {
         };
     });
     /**
-     * Tool 9: getConversationSummary
+     * Tool 11: getConversationSummary
      */
     mcp.tool("getConversationSummary", "Devuelve info básica: último consentimiento, estado y últimos N mensajes", {
         channel: zod_1.z.string().default("whatsapp"),

@@ -259,7 +259,85 @@ async function main() {
   );
 
   /**
-   * Tool 7: getState
+   * Tool 7: validateUserInSSO
+   */
+  mcp.tool(
+    "validateUserInSSO",
+    "Valida la existencia del usuario en el SSO mediante su documento",
+    {
+      channel: z.string().default("whatsapp"),
+      externalId: z.string().min(1),
+      docNumber: z.string().min(1),
+    },
+    async (args) => {
+      const { channel, externalId, docNumber } = args;
+
+      try {
+        // Paso 1: Obtener token OAuth2
+        const tokenResponse = await fetch(process.env.SSO_TOKEN_URL!, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded",
+          },
+          body: new URLSearchParams({
+            grant_type: "password",
+            client_id: process.env.SSO_CLIENT_ID!,
+            client_secret: process.env.SSO_CLIENT_SECRET!,
+            username: process.env.SSO_USERNAME!,
+            password: process.env.SSO_PASSWORD!,
+          }),
+        });
+
+        if (!tokenResponse.ok) {
+          throw new Error(`Token request failed: ${tokenResponse.statusText}`);
+        }
+
+        const tokenData = await tokenResponse.json();
+        const accessToken = tokenData.access_token;
+
+        // Paso 2: Validar existencia del usuario
+        const checkUrl = `${process.env.SSO_CHECK_EXISTENCE_URL}?documento=${docNumber}`;
+        const checkResponse = await fetch(checkUrl, {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+          },
+        });
+
+        if (!checkResponse.ok) {
+          throw new Error(`User check failed: ${checkResponse.statusText}`);
+        }
+
+        const userData = await checkResponse.json();
+
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              exists: userData.exists || false,
+              docNumber,
+              userData: userData,
+            }),
+          }],
+        };
+      } catch (error: any) {
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              exists: false,
+              error: error.message,
+              docNumber,
+            }),
+          }],
+        };
+      }
+    }
+  );
+
+  /**
+   * Tool 8: getState
    */
   mcp.tool(
     "getState",
@@ -287,7 +365,7 @@ async function main() {
   );
 
   /**
-   * Tool 8: setState
+   * Tool 9: setState
    */
   mcp.tool(
     "setState",
@@ -327,7 +405,7 @@ async function main() {
   );
 
   /**
-   * Tool 9: appendMessage
+   * Tool 10: appendMessage
    */
   mcp.tool(
     "appendMessage",
@@ -363,7 +441,7 @@ async function main() {
   );
 
   /**
-   * Tool 10: getConversationSummary
+   * Tool 11: getConversationSummary
    */
   mcp.tool(
     "getConversationSummary",
