@@ -7,6 +7,8 @@ RUN npm ci
 
 COPY . .
 
+RUN ls -la node_modules/.bin && chmod -R +x node_modules/.bin
+
 # ✅ compila TypeScript a /app/dist
 RUN npm run build
 
