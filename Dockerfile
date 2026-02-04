@@ -7,6 +7,7 @@ RUN npm ci
 
 COPY . .
 
-EXPOSE 3333
+# ✅ compila TypeScript a /app/dist
+RUN npm run build
 
 CMD ["npm", "run", "start"]
