@@ -225,7 +225,41 @@ async function main() {
   );
 
   /**
-   * Tool 6: getState
+   * Tool 6: requestDocNumberConfirmation
+   */
+  mcp.tool(
+    "requestDocNumberConfirmation",
+    "Solicita confirmación del número de documento mediante template de WhatsApp",
+    {
+      channel: z.string().default("whatsapp"),
+      externalId: z.string().min(1),
+      docNumber: z.string().min(1),
+    },
+    async (args) => {
+      const { channel, externalId, docNumber } = args;
+
+      await ensureUserAndConversation({
+        channel,
+        externalId,
+      });
+
+      // Retorna instrucción para n8n de enviar el template de confirmación
+      return {
+        content: [{ 
+          type: "text", 
+          text: JSON.stringify({ 
+            action: "sendDocConfirmation",
+            templateName: "doc_confirmation",
+            docNumber: docNumber,
+            message: "Se debe enviar el template de confirmación de documento"
+          }) 
+        }],
+      };
+    }
+  );
+
+  /**
+   * Tool 7: getState
    */
   mcp.tool(
     "getState",
@@ -253,7 +287,7 @@ async function main() {
   );
 
   /**
-   * Tool 7: setState
+   * Tool 8: setState
    */
   mcp.tool(
     "setState",
@@ -293,7 +327,7 @@ async function main() {
   );
 
   /**
-   * Tool 8: appendMessage
+   * Tool 9: appendMessage
    */
   mcp.tool(
     "appendMessage",
@@ -329,7 +363,7 @@ async function main() {
   );
 
   /**
-   * Tool 9: getConversationSummary
+   * Tool 10: getConversationSummary
    */
   mcp.tool(
     "getConversationSummary",
