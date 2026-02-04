@@ -1,148 +1,101 @@
 import { createServer } from "node:http";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { Readable } from "node:stream";
-import { z } from "zod";
 
+import { z } from "zod";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 
 const PORT = Number(process.env.PORT ?? 3333);
 const MCP_BEARER_TOKEN = process.env.MCP_BEARER_TOKEN ?? "";
 
-// Guardamos transportes por sessionId
-const transports = new Map<string, SSEServerTransport>();
+function setCors(res: ServerResponse) {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+}
 
 function assertAuth(req: IncomingMessage) {
-    if (!MCP_BEARER_TOKEN) return;
-    const auth = req.headers.authorization ?? "";
-    if (auth !== `Bearer ${MCP_BEARER_TOKEN}`) {
-        const err: any = new Error("Unauthorized");
-        err.statusCode = 401;
-        throw err;
-    }
+  if (!MCP_BEARER_TOKEN) return;
+  const auth = req.headers.authorization ?? "";
+  if (auth !== `Bearer ${MCP_BEARER_TOKEN}`) {
+    const err: any = new Error("Unauthorized");
+    err.statusCode = 401;
+    throw err;
+  }
 }
 
 async function main() {
-    const mcp = new McpServer({
-        name: "mcp-server-agent",
-        version: "0.1.0",
-    });
+  const mcp = new McpServer({
+    name: "mcp-server-agent",
+    version: "0.1.0",
+  });
 
-    // Tool demo para probar rápido
-    // Nota: inputSchema acepta undefined para evitar el error "expected object"
-    mcp.tool(
-        "ping",
-        "Devuelve pong",
-        { inputSchema: z.object({}).optional().default({}) },
-        async () => {
-            return { content: [{ type: "text", text: "pong" }] };
-        }
-    );
+  // Tool demo (sin args)
+  mcp.tool(
+    "ping",
+    "Devuelve pong",
+    { paramsSchema: z.object({}) },
+    async () => ({ content: [{ type: "text", text: "pong" }] })
+  );
 
-    const server = createServer(async (req: IncomingMessage, res: ServerResponse) => {
-        try {
-            if (!req.url) {
-                res.writeHead(400).end("Bad Request");
-                return;
-            }
+  const server = createServer(async (req: IncomingMessage, res: ServerResponse) => {
+    try {
+      setCors(res);
 
-            // Health
-            if (req.method === "GET" && req.url === "/health") {
-                res.writeHead(200, { "content-type": "application/json" });
-                res.end(JSON.stringify({ ok: true }));
-                return;
-            }
+      if (req.method === "OPTIONS") {
+        res.writeHead(204);
+        res.end();
+        return;
+      }
 
-            /**
-             * 1) SSE handshake
-             * GET /mcp/sse
-             */
-            if (req.method === "GET" && req.url.startsWith("/mcp/sse")) {
-                assertAuth(req);
+      if (!req.url) {
+        res.writeHead(400, { "content-type": "application/json" });
+        res.end(JSON.stringify({ error: "Bad Request" }));
+        return;
+      }
 
-                const transport = new SSEServerTransport("/mcp/messages", res);
-                transports.set(transport.sessionId, transport);
+      // Health
+      if (req.method === "GET" && req.url === "/health") {
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end(JSON.stringify({ ok: true }));
+        return;
+      }
 
-                // cuando el cliente cierre, limpiamos
-                res.on("close", () => {
-                    transports.delete(transport.sessionId);
-                });
+      /**
+       * MCP endpoint para n8n (HTTP Streamable)
+       * n8n MCP Client -> POST https://.../mcp
+       */
+      if (req.method === "POST" && req.url === "/mcp") {
+        assertAuth(req);
 
-                await mcp.connect(transport);
-                return; // IMPORTANT: no cierres res, lo maneja SSE
-            }
+        // OJO: en tu versión, el constructor NO recibe (req, res)
+        const transport = new StreamableHTTPServerTransport();
 
-            /**
-             * 2) endpoint para recibir mensajes
-             * POST /mcp/messages?sessionId=...
-             */
-            if (req.method === "POST" && req.url.startsWith("/mcp/messages")) {
-                assertAuth(req);
+        // Conectar el server MCP al transport
+        await mcp.connect(transport);
 
-                const urlObj = new URL(req.url, `http://localhost:${PORT}`);
-                const sessionId = urlObj.searchParams.get("sessionId");
+        // Delegar el handling del request al transport (AQUÍ sí van req/res)
+        await transport.handleRequest(req, res);
+        return;
+      }
 
-                if (!sessionId) {
-                    res.writeHead(400, { "content-type": "application/json" });
-                    res.end(JSON.stringify({ error: "Missing sessionId" }));
-                    return;
-                }
+      res.writeHead(404, { "content-type": "application/json" });
+      res.end(JSON.stringify({ error: "Not Found" }));
+    } catch (e: any) {
+      const status = e?.statusCode ?? 500;
+      res.writeHead(status, { "content-type": "application/json" });
+      res.end(JSON.stringify({ error: e?.message ?? "Internal error" }));
+    }
+  });
 
-                const transport = transports.get(sessionId);
-                if (!transport) {
-                    res.writeHead(404, { "content-type": "application/json" });
-                    res.end(JSON.stringify({ error: "Unknown sessionId" }));
-                    return;
-                }
-
-                // ==========================
-                // DEBUG TEMPORAL: ver body real
-                // ==========================
-                const chunks: Buffer[] = [];
-                req.on("data", (c) => chunks.push(c));
-                req.on("end", async () => {
-                    const raw = Buffer.concat(chunks).toString("utf8");
-
-                    console.log("========== MCP /mcp/messages DEBUG ==========");
-                    console.log("CONTENT-TYPE >>>", req.headers["content-type"]);
-                    console.log("RAW BODY >>>", raw);
-                    console.log("============================================");
-
-                    // Reinyectar el body para que handlePostMessage lo lea
-                    const proxyReq = Readable.from([raw]) as any;
-                    proxyReq.headers = req.headers;
-                    proxyReq.method = req.method;
-                    proxyReq.url = req.url;
-
-                    try {
-                        await transport.handlePostMessage(proxyReq, res);
-                    } catch (e: any) {
-                        const status = e?.statusCode ?? 500;
-                        res.writeHead(status, { "content-type": "application/json" });
-                        res.end(JSON.stringify({ error: e?.message ?? "Internal error" }));
-                    }
-                });
-
-                return;
-            }
-
-            res.writeHead(404).end("Not Found");
-        } catch (e: any) {
-            const status = e?.statusCode ?? 500;
-            res.writeHead(status, { "content-type": "application/json" });
-            res.end(JSON.stringify({ error: e?.message ?? "Internal error" }));
-        }
-    });
-
-    server.listen(PORT, () => {
-        console.log(`✅ MCP server listening on http://localhost:${PORT}`);
-        console.log(`Health: http://localhost:${PORT}/health`);
-        console.log(`SSE:   http://localhost:${PORT}/mcp/sse`);
-        console.log(`POST:  http://localhost:${PORT}/mcp/messages?sessionId=...`);
-    });
+  server.listen(PORT, () => {
+    console.log(`✅ MCP server listening on http://localhost:${PORT}`);
+    console.log(`Health: http://localhost:${PORT}/health`);
+    console.log(`MCP (n8n): http://localhost:${PORT}/mcp`);
+  });
 }
 
 main().catch((e) => {
-    console.error(e);
-    process.exit(1);
+  console.error(e);
+  process.exit(1);
 });
