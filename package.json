@@ -16,7 +16,9 @@
   "license": "ISC",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.25.3",
+    "@prisma/adapter-pg": "^7.3.0",
     "@prisma/client": "^7.3.0",
+    "pg": "^8.18.0",
     "prisma": "^7.3.0",
     "zod": "^4.3.6"
   },
