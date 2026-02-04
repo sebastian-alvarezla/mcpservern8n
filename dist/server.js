@@ -97,7 +97,31 @@ async function main() {
         };
     });
     /**
-     * Tool 3: recordConsent
+     * Tool 3: requestPolicyConsent
+     */
+    mcp.tool("requestPolicyConsent", "Solicita al usuario que acepte la política de datos enviando un template de WhatsApp con botones", {
+        channel: zod_1.z.string().default("whatsapp"),
+        externalId: zod_1.z.string().min(1),
+    }, async (args) => {
+        const { channel, externalId } = args;
+        await ensureUserAndConversation({
+            channel,
+            externalId,
+        });
+        // Retorna instrucción para n8n de enviar el template
+        return {
+            content: [{
+                    type: "text",
+                    text: JSON.stringify({
+                        action: "sendPolicyTemplate",
+                        templateName: "policy_consent",
+                        message: "Se debe enviar el template de políticas de WhatsApp"
+                    })
+                }],
+        };
+    });
+    /**
+     * Tool 4: recordConsent
      */
     mcp.tool("recordConsent", "Registra aceptación/rechazo de política de tratamiento de datos", {
         channel: zod_1.z.string().default("whatsapp"),
@@ -125,7 +149,31 @@ async function main() {
         };
     });
     /**
-     * Tool 4: getState
+     * Tool 5: saveDocNumber
+     */
+    mcp.tool("saveDocNumber", "Guarda el número de documento de identidad del usuario", {
+        channel: zod_1.z.string().default("whatsapp"),
+        externalId: zod_1.z.string().min(1),
+        docNumber: zod_1.z.string().min(1),
+    }, async (args) => {
+        const { channel, externalId, docNumber } = args;
+        const { user } = await ensureUserAndConversation({
+            channel,
+            externalId,
+        });
+        const updatedUser = await prisma_1.prisma.user.update({
+            where: { id: user.id },
+            data: { docNumber },
+        });
+        return {
+            content: [{ type: "text", text: JSON.stringify({
+                        userId: updatedUser.id,
+                        docNumber: updatedUser.docNumber
+                    }) }],
+        };
+    });
+    /**
+     * Tool 6: getState
      */
     mcp.tool("getState", "Obtiene el estado JSON de la conversación", {
         channel: zod_1.z.string().default("whatsapp"),
@@ -144,7 +192,7 @@ async function main() {
         };
     });
     /**
-     * Tool 5: setState
+     * Tool 7: setState
      */
     mcp.tool("setState", "Actualiza el estado JSON: replace=true reemplaza, si no hace merge superficial", {
         channel: zod_1.z.string().default("whatsapp"),
@@ -172,7 +220,7 @@ async function main() {
         };
     });
     /**
-     * Tool 6: appendMessage
+     * Tool 8: appendMessage
      */
     mcp.tool("appendMessage", "Guarda un mensaje en la conversación", {
         channel: zod_1.z.string().default("whatsapp"),
@@ -199,7 +247,7 @@ async function main() {
         };
     });
     /**
-     * Tool 7: getConversationSummary
+     * Tool 9: getConversationSummary
      */
     mcp.tool("getConversationSummary", "Devuelve info básica: último consentimiento, estado y últimos N mensajes", {
         channel: zod_1.z.string().default("whatsapp"),
