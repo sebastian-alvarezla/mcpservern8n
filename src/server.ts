@@ -72,14 +72,6 @@ async function main() {
     version: "0.1.0",
   });
 
-  // Create HTTP Streamable transport
-  const transport = new StreamableHTTPServerTransport({
-    sessionIdGenerator: () => crypto.randomUUID(),
-  });
-
-  // Connect MCP server to transport
-  await mcp.connect(transport);
-
   /**
    * Tool 1: ping
    */
@@ -330,6 +322,14 @@ async function main() {
       };
     }
   );
+
+  // Create HTTP Streamable transport
+  const transport = new StreamableHTTPServerTransport({
+    sessionIdGenerator: () => crypto.randomUUID(),
+  });
+
+  // Connect MCP server to transport AFTER registering all tools
+  await mcp.connect(transport);
 
   const server = createServer(async (req: IncomingMessage, res: ServerResponse) => {
     try {
