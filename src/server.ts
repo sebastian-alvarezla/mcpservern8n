@@ -192,7 +192,40 @@ async function main() {
   );
 
   /**
-   * Tool 5: getState
+   * Tool 5: saveDocNumber
+   */
+  mcp.tool(
+    "saveDocNumber",
+    "Guarda el número de documento de identidad del usuario",
+    {
+      channel: z.string().default("whatsapp"),
+      externalId: z.string().min(1),
+      docNumber: z.string().min(1),
+    },
+    async (args) => {
+      const { channel, externalId, docNumber } = args;
+
+      const { user } = await ensureUserAndConversation({
+        channel,
+        externalId,
+      });
+
+      const updatedUser = await prisma.user.update({
+        where: { id: user.id },
+        data: { docNumber },
+      });
+
+      return {
+        content: [{ type: "text", text: JSON.stringify({ 
+          userId: updatedUser.id,
+          docNumber: updatedUser.docNumber 
+        }) }],
+      };
+    }
+  );
+
+  /**
+   * Tool 6: getState
    */
   mcp.tool(
     "getState",
@@ -220,7 +253,7 @@ async function main() {
   );
 
   /**
-   * Tool 6: setState
+   * Tool 7: setState
    */
   mcp.tool(
     "setState",
@@ -260,7 +293,7 @@ async function main() {
   );
 
   /**
-   * Tool 7: appendMessage
+   * Tool 8: appendMessage
    */
   mcp.tool(
     "appendMessage",
@@ -296,7 +329,7 @@ async function main() {
   );
 
   /**
-   * Tool 8: getConversationSummary
+   * Tool 9: getConversationSummary
    */
   mcp.tool(
     "getConversationSummary",
