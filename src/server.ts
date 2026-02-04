@@ -2,12 +2,14 @@ import { createServer } from "node:http";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { z } from "zod";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { prisma } from "./lib/prisma";
 import { Channel } from "@prisma/client";
 
 const PORT = Number(process.env.PORT ?? 3333);
 const MCP_BEARER_TOKEN = process.env.MCP_BEARER_TOKEN ?? "";
+
+const transports = new Map<string, SSEServerTransport>();
 
 function assertAuth(req: IncomingMessage) {
   if (!MCP_BEARER_TOKEN) return;
@@ -323,13 +325,6 @@ async function main() {
     }
   );
 
-  // Create HTTP Streamable transport (without connecting it)
-  const transport = new StreamableHTTPServerTransport({
-    sessionIdGenerator: () => crypto.randomUUID(),
-  });
-  
-  let isTransportConnected = false;
-
   const server = createServer(async (req: IncomingMessage, res: ServerResponse) => {
     try {
       if (!req.url) {
@@ -344,18 +339,45 @@ async function main() {
       }
 
       /**
-       * 1) HTTP Streamable endpoint - connect on first request
+       * 1) SSE handshake
        */
-      if (req.method === "POST" && req.url.startsWith("/mcp/sse")) {
+      if (req.method === "GET" && req.url.startsWith("/mcp/sse")) {
         assertAuth(req);
-        
-        // Connect transport to MCP server if not already connected
-        if (!isTransportConnected) {
-          await mcp.connect(transport);
-          isTransportConnected = true;
+
+        const transport = new SSEServerTransport("/mcp/messages", res);
+        transports.set(transport.sessionId, transport);
+
+        res.on("close", () => {
+          transports.delete(transport.sessionId);
+        });
+
+        await mcp.connect(transport);
+        return;
+      }
+
+      /**
+       * 2) POST messages
+       */
+      if (req.method === "POST" && req.url.startsWith("/mcp/messages")) {
+        assertAuth(req);
+
+        const urlObj = new URL(req.url, `http://localhost:${PORT}`);
+        const sessionId = urlObj.searchParams.get("sessionId");
+
+        if (!sessionId) {
+          res.writeHead(400, { "content-type": "application/json" });
+          res.end(JSON.stringify({ error: "Missing sessionId" }));
+          return;
         }
-        
-        await transport.handleRequest(req, res);
+
+        const transport = transports.get(sessionId);
+        if (!transport) {
+          res.writeHead(404, { "content-type": "application/json" });
+          res.end(JSON.stringify({ error: "Unknown sessionId" }));
+          return;
+        }
+
+        await transport.handlePostMessage(req, res);
         return;
       }
 
@@ -370,8 +392,8 @@ async function main() {
   server.listen(PORT, () => {
     console.log(`✅ MCP server listening on http://localhost:${PORT}`);
     console.log(`Health: http://localhost:${PORT}/health`);
-    console.log(`HTTP Streamable: http://localhost:${PORT}/mcp/sse`);
-    console.log(`POST:  http://localhost:${PORT}/mcp/messages?sessionId=...`);
+    console.log(`SSE:    http://localhost:${PORT}/mcp/sse`);
+    console.log(`POST:   http://localhost:${PORT}/mcp/messages?sessionId=...`);
   });
 }
 
