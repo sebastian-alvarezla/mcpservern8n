@@ -123,7 +123,39 @@ async function main() {
   );
 
   /**
-   * Tool 3: recordConsent
+   * Tool 3: requestPolicyConsent
+   */
+  mcp.tool(
+    "requestPolicyConsent",
+    "Solicita al usuario que acepte la política de datos enviando un template de WhatsApp con botones",
+    {
+      channel: z.string().default("whatsapp"),
+      externalId: z.string().min(1),
+    },
+    async (args) => {
+      const { channel, externalId } = args;
+
+      await ensureUserAndConversation({
+        channel,
+        externalId,
+      });
+
+      // Retorna instrucción para n8n de enviar el template
+      return {
+        content: [{ 
+          type: "text", 
+          text: JSON.stringify({ 
+            action: "sendPolicyTemplate",
+            templateName: "policy_consent",
+            message: "Se debe enviar el template de políticas de WhatsApp"
+          }) 
+        }],
+      };
+    }
+  );
+
+  /**
+   * Tool 4: recordConsent
    */
   mcp.tool(
     "recordConsent",
@@ -160,7 +192,7 @@ async function main() {
   );
 
   /**
-   * Tool 4: getState
+   * Tool 5: getState
    */
   mcp.tool(
     "getState",
@@ -188,7 +220,7 @@ async function main() {
   );
 
   /**
-   * Tool 5: setState
+   * Tool 6: setState
    */
   mcp.tool(
     "setState",
@@ -228,7 +260,7 @@ async function main() {
   );
 
   /**
-   * Tool 6: appendMessage
+   * Tool 7: appendMessage
    */
   mcp.tool(
     "appendMessage",
@@ -264,7 +296,7 @@ async function main() {
   );
 
   /**
-   * Tool 7: getConversationSummary
+   * Tool 8: getConversationSummary
    */
   mcp.tool(
     "getConversationSummary",
