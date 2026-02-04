@@ -323,13 +323,12 @@ async function main() {
     }
   );
 
-  // Create HTTP Streamable transport
+  // Create HTTP Streamable transport (without connecting it)
   const transport = new StreamableHTTPServerTransport({
     sessionIdGenerator: () => crypto.randomUUID(),
   });
-
-  // Connect MCP server to transport AFTER registering all tools
-  await mcp.connect(transport);
+  
+  let isTransportConnected = false;
 
   const server = createServer(async (req: IncomingMessage, res: ServerResponse) => {
     try {
@@ -345,10 +344,17 @@ async function main() {
       }
 
       /**
-       * 1) HTTP Streamable endpoint
+       * 1) HTTP Streamable endpoint - connect on first request
        */
       if (req.method === "POST" && req.url.startsWith("/mcp/sse")) {
         assertAuth(req);
+        
+        // Connect transport to MCP server if not already connected
+        if (!isTransportConnected) {
+          await mcp.connect(transport);
+          isTransportConnected = true;
+        }
+        
         await transport.handleRequest(req, res);
         return;
       }
