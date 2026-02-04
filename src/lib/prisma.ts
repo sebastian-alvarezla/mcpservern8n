@@ -6,11 +6,15 @@ declare global {
   var __prisma: PrismaClient | undefined;
 }
 
+// Detectar si la URL requiere SSL (contiene sslmode o es una conexión externa)
+const connectionString = process.env.DATABASE_URL || "";
+const requiresSSL = connectionString.includes("sslmode=require") || 
+                    connectionString.includes("render.com") ||
+                    connectionString.includes("amazonaws.com");
+
 const pool = new Pool({ 
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === 'production' 
-    ? { rejectUnauthorized: false } 
-    : undefined
+  connectionString,
+  ssl: requiresSSL ? { rejectUnauthorized: false } : false
 });
 const adapter = new PrismaPg(pool);
 
