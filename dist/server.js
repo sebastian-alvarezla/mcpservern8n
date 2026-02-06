@@ -242,7 +242,38 @@ async function main() {
         };
     });
     /**
-     * Tool 7: validateCurrentUser
+     * Tool 7: confirmDocNumber
+     */
+    mcp.tool("confirmDocNumber", "El usuario confirma que su número de documento es correcto", {
+        channel: zod_1.z.string().default("whatsapp"),
+        externalId: zod_1.z.string().min(1),
+    }, async (args) => {
+        const { channel, externalId } = args;
+        const { conversation } = await ensureUserAndConversation({
+            channel,
+            externalId,
+        });
+        // Actualizar estado
+        await prisma_1.prisma.conversationState.update({
+            where: { conversationId: conversation.id },
+            data: {
+                data: {
+                    step: "document_confirmed"
+                }
+            },
+        });
+        return {
+            content: [{
+                    type: "text",
+                    text: JSON.stringify({
+                        confirmed: true,
+                        message: "Documento confirmado correctamente"
+                    })
+                }],
+        };
+    });
+    /**
+     * Tool 8: validateCurrentUser
      */
     mcp.tool("validateCurrentUser", "Valida el usuario actual en el SSO usando el documento guardado en su estado", {
         channel: zod_1.z.string().default("whatsapp"),
@@ -306,7 +337,7 @@ async function main() {
         }
     });
     /**
-     * Tool 8: validateUserInSSO
+     * Tool 9: validateUserInSSO
      */
     mcp.tool("validateUserInSSO", "Valida la existencia del usuario en el SSO mediante su documento", {
         channel: zod_1.z.string().default("whatsapp"),
@@ -355,7 +386,7 @@ async function main() {
         }
     });
     /**
-     * Tool 9: getState
+     * Tool 10: getState
      */
     mcp.tool("getState", "Obtiene el estado JSON de la conversación", {
         channel: zod_1.z.string().default("whatsapp"),
@@ -374,7 +405,7 @@ async function main() {
         };
     });
     /**
-     * Tool 10: setState
+     * Tool 11: setState
      */
     mcp.tool("setState", "Actualiza el estado JSON: replace=true reemplaza, si no hace merge superficial", {
         channel: zod_1.z.string().default("whatsapp"),
@@ -402,7 +433,7 @@ async function main() {
         };
     });
     /**
-     * Tool 11: appendMessage
+     * Tool 12: appendMessage
      */
     mcp.tool("appendMessage", "Guarda un mensaje en la conversación", {
         channel: zod_1.z.string().default("whatsapp"),
@@ -429,7 +460,7 @@ async function main() {
         };
     });
     /**
-     * Tool 12: getConversationSummary
+     * Tool 13: getConversationSummary
      */
     mcp.tool("getConversationSummary", "Devuelve info básica: último consentimiento, estado y últimos N mensajes", {
         channel: zod_1.z.string().default("whatsapp"),

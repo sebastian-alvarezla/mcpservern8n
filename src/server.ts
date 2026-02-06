@@ -310,7 +310,47 @@ async function main() {
   );
 
   /**
-   * Tool 7: validateCurrentUser
+   * Tool 7: confirmDocNumber
+   */
+  mcp.tool(
+    "confirmDocNumber",
+    "El usuario confirma que su número de documento es correcto",
+    {
+      channel: z.string().default("whatsapp"),
+      externalId: z.string().min(1),
+    },
+    async (args) => {
+      const { channel, externalId } = args;
+
+      const { conversation } = await ensureUserAndConversation({
+        channel,
+        externalId,
+      });
+
+      // Actualizar estado
+      await prisma.conversationState.update({
+        where: { conversationId: conversation.id },
+        data: { 
+          data: { 
+            step: "document_confirmed"
+          } 
+        },
+      });
+
+      return {
+        content: [{ 
+          type: "text", 
+          text: JSON.stringify({ 
+            confirmed: true,
+            message: "Documento confirmado correctamente"
+          }) 
+        }],
+      };
+    }
+  );
+
+  /**
+   * Tool 8: validateCurrentUser
    */
   mcp.tool(
     "validateCurrentUser",
@@ -386,7 +426,7 @@ async function main() {
   );
 
   /**
-   * Tool 8: validateUserInSSO
+   * Tool 9: validateUserInSSO
    */
   mcp.tool(
     "validateUserInSSO",
@@ -445,7 +485,7 @@ async function main() {
   );
 
   /**
-   * Tool 9: getState
+   * Tool 10: getState
    */
   mcp.tool(
     "getState",
@@ -473,7 +513,7 @@ async function main() {
   );
 
   /**
-   * Tool 10: setState
+   * Tool 11: setState
    */
   mcp.tool(
     "setState",
@@ -513,7 +553,7 @@ async function main() {
   );
 
   /**
-   * Tool 11: appendMessage
+   * Tool 12: appendMessage
    */
   mcp.tool(
     "appendMessage",
@@ -549,7 +589,7 @@ async function main() {
   );
 
   /**
-   * Tool 12: getConversationSummary
+   * Tool 13: getConversationSummary
    */
   mcp.tool(
     "getConversationSummary",
