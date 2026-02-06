@@ -299,7 +299,83 @@ async function main() {
   );
 
   /**
-   * Tool 7: validateUserInSSO
+   * Tool 7: validateCurrentUser
+   */
+  mcp.tool(
+    "validateCurrentUser",
+    "Valida el usuario actual en el SSO usando el documento guardado en su estado",
+    {
+      channel: z.string().default("whatsapp"),
+      externalId: z.string().min(1),
+    },
+    async (args) => {
+      const { channel, externalId } = args;
+
+      // Obtener el documento del usuario desde la BD
+      const { user, conversation } = await ensureUserAndConversation({
+        channel,
+        externalId,
+      });
+
+      if (!user.docNumber) {
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              exists: false,
+              error: "No document number found for user",
+            }),
+          }],
+        };
+      }
+
+      try {
+        // Obtener token OAuth2 (con cache)
+        const accessToken = await getSSOToken();
+
+        // Validar existencia del usuario
+        const checkUrl = `${process.env.SSO_CHECK_EXISTENCE_URL}?documento=${user.docNumber}`;
+        const checkResponse = await fetch(checkUrl, {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+          },
+        });
+
+        if (!checkResponse.ok) {
+          throw new Error(`User check failed: ${checkResponse.statusText}`);
+        }
+
+        const userData = await checkResponse.json();
+
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              exists: userData.exists || false,
+              docNumber: user.docNumber,
+              userData: userData,
+            }),
+          }],
+        };
+      } catch (error: any) {
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              exists: false,
+              error: error.message,
+              docNumber: user.docNumber,
+            }),
+          }],
+        };
+      }
+    }
+  );
+
+  /**
+   * Tool 8: validateUserInSSO
    */
   mcp.tool(
     "validateUserInSSO",
@@ -358,7 +434,7 @@ async function main() {
   );
 
   /**
-   * Tool 8: getState
+   * Tool 9: getState
    */
   mcp.tool(
     "getState",
@@ -386,7 +462,7 @@ async function main() {
   );
 
   /**
-   * Tool 9: setState
+   * Tool 10: setState
    */
   mcp.tool(
     "setState",
@@ -426,7 +502,7 @@ async function main() {
   );
 
   /**
-   * Tool 10: appendMessage
+   * Tool 11: appendMessage
    */
   mcp.tool(
     "appendMessage",
@@ -462,7 +538,7 @@ async function main() {
   );
 
   /**
-   * Tool 11: getConversationSummary
+   * Tool 12: getConversationSummary
    */
   mcp.tool(
     "getConversationSummary",
