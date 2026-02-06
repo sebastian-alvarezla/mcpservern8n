@@ -278,9 +278,20 @@ async function main() {
     async (args) => {
       const { channel, externalId, docNumber } = args;
 
-      await ensureUserAndConversation({
+      const { conversation } = await ensureUserAndConversation({
         channel,
         externalId,
+      });
+
+      // Actualizar estado para indicar que estamos esperando confirmación
+      await prisma.conversationState.update({
+        where: { conversationId: conversation.id },
+        data: { 
+          data: { 
+            step: "awaiting_doc_confirmation",
+            docNumber: docNumber 
+          } 
+        },
       });
 
       // Retorna instrucción para n8n de enviar el template de confirmación
