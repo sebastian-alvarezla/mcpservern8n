@@ -9,6 +9,39 @@ const client_1 = require("@prisma/client");
 const PORT = Number(process.env.PORT ?? 3333);
 const MCP_BEARER_TOKEN = process.env.MCP_BEARER_TOKEN ?? "";
 const transports = new Map();
+// Cache del token SSO
+let ssoTokenCache = null;
+async function getSSOToken() {
+    // Si hay token en cache y no ha expirado, usarlo
+    if (ssoTokenCache && Date.now() < ssoTokenCache.expiresAt) {
+        return ssoTokenCache.token;
+    }
+    // Obtener nuevo token
+    const tokenResponse = await fetch(process.env.SSO_TOKEN_URL, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: new URLSearchParams({
+            grant_type: "password",
+            client_id: process.env.SSO_CLIENT_ID,
+            client_secret: process.env.SSO_CLIENT_SECRET,
+            username: process.env.SSO_USERNAME,
+            password: process.env.SSO_PASSWORD,
+        }),
+    });
+    if (!tokenResponse.ok) {
+        throw new Error(`Token request failed: ${tokenResponse.statusText}`);
+    }
+    const tokenData = await tokenResponse.json();
+    // Cachear token (expira en expires_in segundos - 60s de margen)
+    const expiresIn = tokenData.expires_in || 300;
+    ssoTokenCache = {
+        token: tokenData.access_token,
+        expiresAt: Date.now() + (expiresIn - 60) * 1000,
+    };
+    return tokenData.access_token;
+}
 function assertAuth(req) {
     if (!MCP_BEARER_TOKEN)
         return;
@@ -208,25 +241,8 @@ async function main() {
     }, async (args) => {
         const { channel, externalId, docNumber } = args;
         try {
-            // Paso 1: Obtener token OAuth2
-            const tokenResponse = await fetch(process.env.SSO_TOKEN_URL, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/x-www-form-urlencoded",
-                },
-                body: new URLSearchParams({
-                    grant_type: "password",
-                    client_id: process.env.SSO_CLIENT_ID,
-                    client_secret: process.env.SSO_CLIENT_SECRET,
-                    username: process.env.SSO_USERNAME,
-                    password: process.env.SSO_PASSWORD,
-                }),
-            });
-            if (!tokenResponse.ok) {
-                throw new Error(`Token request failed: ${tokenResponse.statusText}`);
-            }
-            const tokenData = await tokenResponse.json();
-            const accessToken = tokenData.access_token;
+            // Paso 1: Obtener token OAuth2 (con cache)
+            const accessToken = await getSSOToken();
             // Paso 2: Validar existencia del usuario
             const checkUrl = `${process.env.SSO_CHECK_EXISTENCE_URL}?documento=${docNumber}`;
             const checkResponse = await fetch(checkUrl, {
